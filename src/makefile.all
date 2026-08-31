@@ -1,0 +1,69 @@
+#
+#  src/makefile.all
+#
+#  Copyright(C) 2026 - MT
+#
+#  Common cross platform build rules.
+#
+#  PROGRAM - Identifies the program being built by this invocation.
+#  SOURCES - Contains the program-specific source files.
+#  COMMON  - Contains source files shared by all programs.
+#
+#  The  executable  target depends on its own object file  and  all  common
+#  module  objects.  This provides the dependency information required  for
+#  correct incremental linking.
+#
+#  This  program is free software: you can redistribute it and/or modify it
+#  under  the terms of the GNU General Public License as published  by  the
+#  Free  Software  Foundation, either version 3 of the License, or (at your
+#  option) any later version.
+#
+#  This  program  is  distributed  in  the  hope that it will  be  useful,  but
+#  WITHOUT   ANY   WARRANTY;   without even   the   implied   warranty   of
+#  MERCHANTABILITY   or   FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+#  Public License for more details.
+#
+#  You  should have received a copy of the GNU General Public License along
+#  with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#  29 Aug 26         - Initial version - MT
+#  31 Aug 26         - Define compiler version and commit - MT 
+#
+#  Note:             - DO NOT put comments inside rules.
+#
+# Get compiler version.
+# Note -  s/[ 	]*$$// contains a literal space followed by a tab.
+COMPILER= `$(CC) -v 2>&1 | grep ' version ' | sed -e 's/([^()]*)//g; s/version//g; s/  */ /g; y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/; s/[ 	]*$$//' | sed -n '1p'`
+
+# Define the current commit and pass to the compiler - returns an empty string if git not installed
+COMMIT = $(shell command -v git >/dev/null 2>&1 && git log -1 HEAD --format=%h 2>/dev/null)
+CFLAGS += $(shell if [ -n "$(COMMIT)" ]; then echo "-DCOMMIT_ID='\"[Commit Id : $(COMMIT)]\"'"; fi)
+CFLAGS += $(shell if [ -n "$(COMPILER)" ]; then echo "-D__compiler__='\"$(COMPILER)\"'"; fi)
+
+# Relative path to executable files.
+BIN	= ../bin
+
+# Object files belonging to the program and the common modules.
+OBJECTS	= $(SOURCES:.c=.o)
+MODULES	= $(COMMON:.c=.o)
+
+# Build the selected program executable.
+all: $(BIN)/$(PROGRAM)
+
+# Build/update all common module objects.
+common: $(MODULES)
+
+# A program executable depends on its own object file and every common module.
+$(BIN)/$(PROGRAM): $(PROGRAM).o $(MODULES)
+	@mkdir -p $(BIN)
+	@if [ -n "$${VERBOSE}" ] ;then echo 'Link    : $(CC)$(CFLAGS) $(PROGRAM).o $(MODULES) $(LDFLAGS) $(LDLIBS) -o $@'; fi || true	
+	@$(CC) $(CFLAGS) $(PROGRAM).o $(MODULES) $(LDFLAGS) $(LDLIBS) -o $@
+	@if [ -z "$${VERBOSE}" ] ;then if ls --color $@ > /dev/null 2>&1 ;then  ls --color $@ | sed "s:$(BIN)/::g"; else ls $@ | sed "s:$(BIN)/::g"; fi; fi || true
+
+# Use the traditional suffix-rule mechanism supported by Linux and Tru64/OSF1.
+.SUFFIXES: .c .o
+
+# Compile a C source file into an object file.
+.c.o:
+	@if [ -n "$${VERBOSE}" ] ;then echo 'Compile : $(CC)$(CFLAGS) -c $< -o $@'; fi || true	
+	@$(CC) $(CFLAGS) -c $< -o $@
